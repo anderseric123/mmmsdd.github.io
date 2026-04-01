@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>期市收盘多维异动雷达图</title>
+    <style>
+        /* 全局字体与高冷研报风格重置 */
+        :root {
+            --red-up: #d32f2f;      /* 专业的金融红 */
+            --green-down: #2e7d32;  /* 专业的金融绿 */
+            --text-dark: #1a1a1a;   /* 正文极深灰 */
+            --text-gray: #555555;   /* 辅助说明灰 */
+            --border-color: #d9d9d9;/* 边框灰 */
+            --bg-color: #ffffff;    /* 纯白背景 */
+            --theme-navy: #111a2e;  /* 机构藏青色 */
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            /* 严格遵循要求的字体 */
+            font-family: 'Source Han Sans', 'Noto Sans CJK SC', sans-serif;
+            background-color: #f7f8fa; /* 外围浅灰背景，凸显主体研报白 */
+            color: var(--text-dark);
+            line-height: 1.6;
+            font-size: 16px; /* 适配手机的较大字号 */
+            max-width: 600px;
+            margin: 0 auto;
+            background: var(--bg-color);
+            box-shadow: 0 0 20px rgba(0,0,0,0.05);
+        }
+
+        /* ---------------- 图头设置 (严格遵循高度300px，文字居中偏大) ---------------- */
+        header {
+            height: 300px;
+            background-color: var(--theme-navy);
+            background-image: linear-gradient(180deg, #18253f 0%, #0a111f 100%);
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 0 20px;
+            position: relative;
+            border-bottom: 4px solid var(--red-up);
+        }
+
+        .header-logo {
+            width: 180px;
+            margin-bottom: 20px;
+            filter: invert(1);
+        }
+
+        .header-title {
+            font-size: 2.2rem;
+            font-weight: 900;
+            margin-bottom: 25px;
+            letter-spacing: 1px;
+            line-height: 1.3;
+        }
+
+        .header-date {
+            font-size: 1.05rem;
+            color: #a4b0be;
+            font-family: monospace, sans-serif;
+        }
+
+        .header-summary {
+            margin-top: 16px;
+            font-size: 1.02rem;
+            line-height: 1.7;
+            color: rgba(255,255,255,0.86);
+            max-width: 520px;
+        }
+
+        /* ---------------- 主体内容区 ---------------- */
+        .container {
+            padding: 25px 20px;
+        }
+
+        /* 研报风格的标题段 */
+        .section-title {
+            font-size: 1.35rem;
+            font-weight: 900;
+            color: var(--theme-navy);
+            border-left: 6px solid var(--theme-navy);
+            padding-left: 12px;
+            margin: 30px 0 20px 0;
+            line-height: 1.1;
+        }
+        .section-title:first-child { margin-top: 5px; }
+
+        /* ---------------- 焦点研报段落 ---------------- */
+        .focus-list {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .focus-item {
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 15px;
+        }
+        .focus-item:last-child { border-bottom: none; padding-bottom: 0; }
+
+        .focus-headline {
+            font-size: 1.15rem;
+            font-weight: bold;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+        }
+        
+        /* 替代icon的小方块 */
+        .focus-headline::before {
+            content: "■";
+            font-size: 0.8rem;
+            margin-right: 8px;
+        }
+        .headline-down::before { color: var(--green-down); }
+        .headline-up::before { color: var(--red-up); }
+
+        .focus-content {
+            font-size: 1.05rem;
+            color: var(--text-gray);
+            text-align: justify;
+        }
+
+        .focus-kicker {
+            display: inline-block;
+            font-size: 0.82rem;
+            color: var(--theme-navy);
+            background: #eef2f7;
+            border: 1px solid #d8dee8;
+            padding: 2px 8px;
+            margin-bottom: 8px;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+        }
+
+        .tab-bar {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+
+        .tab-btn {
+            appearance: none;
+            border: 1px solid var(--border-color);
+            background: #f3f5f8;
+            color: var(--theme-navy);
+            padding: 9px 14px;
+            font-size: 0.95rem;
+            font-weight: bold;
+            cursor: pointer;
+            flex: 1 1 calc(50% - 8px);
+            text-align: center;
+        }
+
+        .tab-btn.active {
+            background: var(--theme-navy);
+            color: #fff;
+            border-color: var(--theme-navy);
+        }
+
+        .sub-tab-bar {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 14px;
+        }
+
+        .sub-tab-btn {
+            appearance: none;
+            border: 1px solid #d8dee8;
+            background: #fff;
+            color: #4f5d73;
+            padding: 7px 11px;
+            font-size: 0.88rem;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .sub-tab-btn.active {
+            color: var(--red-up);
+            border-color: rgba(211,47,47,0.25);
+            background: rgba(211,47,47,0.06);
+        }
+
+        .tab-panel {
+            display: none;
+        }
+
+        .tab-panel.active {
+            display: block;
+        }
+
+        /* ---------------- 数据总览网格 ---------------- */
+        .market-table-wrap {
+            border-top: 2px solid var(--text-dark);
+            border-bottom: 2px solid var(--text-dark);
+            margin-bottom: 30px;
+        }
+
+        .category-row {
+            background-color: #f0f2f5;
+            font-weight: bold;
+            font-size: 1.05rem;
+            padding: 8px 10px;
+            color: var(--theme-navy);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .category-note {
+            display: block;
+            margin-top: 3px;
+            font-size: 0.88rem;
+            font-weight: normal;
+            color: #5f6b7a;
+        }
+
+        .grid-data {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+        }
+
+        .data-cell {
+            padding: 12px 5px;
+            text-align: center;
+            border-bottom: 1px solid #f0f0f0;
+            border-right: 1px solid #f0f0f0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .market-table-wrap .data-cell {
+            border-right: 1px solid rgba(255,255,255,0.85);
+            border-bottom: 1px solid rgba(255,255,255,0.85);
+        }
+
+        .market-table-wrap .data-cell.cell-up {
+            background: rgba(211,47,47,0.12);
+        }
+
+        .market-table-wrap .data-cell.cell-down {
+            background: rgba(46,125,50,0.12);
+        }
+
+        .market-table-wrap .data-cell.cell-flat {
+            background: #eef1f4;
+        }
+
+        .data-cell:nth-child(3n) { border-right: none; }
+        .grid-data .data-cell:last-child,
+        .grid-data .data-cell:nth-last-child(2):nth-child(3n+2),
+        .grid-data .data-cell:nth-last-child(3):nth-child(3n+1) {
+            border-bottom: none;
+        }
+
+        .c-name { font-size: 1.05rem; font-weight: bold; color: var(--text-dark); margin-bottom: 4px;}
+        .c-price { font-size: 1.05rem; font-family: monospace, sans-serif;}
+        .c-pct { font-size: 0.95rem; font-weight: bold; font-family: monospace, sans-serif;}
+
+        .c-tag {
+            display: inline-block;
+            margin-top: 6px;
+            padding: 1px 6px;
+            border: 1px solid #d8dee8;
+            background: #f7f9fc;
+            color: #66758a;
+            font-size: 0.78rem;
+            font-weight: bold;
+        }
+
+        .tag-up {
+            color: var(--red-up);
+            border-color: rgba(211,47,47,0.25);
+            background: rgba(211,47,47,0.06);
+        }
+
+        .tag-down {
+            color: var(--green-down);
+            border-color: rgba(46,125,50,0.25);
+            background: rgba(46,125,50,0.06);
+        }
+
+        /* 涨跌颜色与箭头指示 */
+        .up-text { color: var(--red-up); }
+        .down-text { color: var(--green-down); }
+        
+        /* ---------------- 异动简报表格 ---------------- */
+        .report-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            table-layout: fixed;
+        }
+        
+        .report-table th, .report-table td {
+            border: 1px solid var(--border-color);
+            padding: 12px 8px;
+            text-align: center;
+            font-size: 1.05rem;
+            width: 20%;
+        }
+
+        .report-table th {
+            background-color: var(--theme-navy);
+            color: #fff;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        .report-table td.label-col {
+            background-color: #f9f9f9;
+            font-weight: bold;
+            color: var(--text-gray);
+        }
+
+        .report-table td.val-col {
+            font-weight: bold;
+        }
+
+        .rank-col {
+            background-color: #f9f9f9;
+            color: var(--text-gray);
+            font-weight: bold;
+        }
+
+        /* ---------------- 页脚与合规 ---------------- */
+        footer {
+            margin-top: 40px;
+            padding: 25px 20px;
+            background-color: #1a1a1a;
+            color: #a0a0a0;
+            font-size: 0.85rem;
+            line-height: 1.8;
+            border-top: 1px solid #333;
+        }
+
+        .disclaimer {
+            text-align: justify;
+        }
+        .disclaimer strong {
+            color: #d0d0d0;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 图头区域 -->
+    <header>
+        <img class="header-logo" src="/Users/anders/Downloads/容器 (1).svg" alt="金十期货">
+        <div class="header-title">期市收盘多维异动雷达图</div>
+        <div class="header-date">更新时间：2026-04-01 18:56</div>
+        <div class="header-summary">今日盘面主线：贵金属继续走强，原油化工与能源链大幅承压，市场呈现明显的避险偏好与工业品系统性回落。</div>
+    </header>
+
+    <div class="container">
+        
+        <!-- 今日焦点与共振 -->
+        <div class="section-title">今日焦点与共振</div>
+        <div class="focus-list">
+            <div class="focus-item">
+                <div class="focus-kicker">今日主线</div>
+                <div class="focus-headline headline-up"><span class="up-text">贵金属走强，工业品转入系统性回落</span></div>
+                <div class="focus-content">
+                    贵金属方向继续强化，沪银2606上涨 <span class="up-text">4.98%</span>、沪金2606上涨 <span class="up-text">3.18%</span>；与此同时，原油、燃油、甲醇、乙二醇等工业品普遍大跌，盘面主线已从分化走向更明显的风险收缩。
+                </div>
+            </div>
+            
+            <div class="focus-item">
+                <div class="focus-kicker">领涨板块</div>
+                <div class="focus-headline headline-up"><span class="up-text">贵金属仍是最强方向</span></div>
+                <div class="focus-content">
+                    沪银2606最新价18918，涨幅 <span class="up-text">4.98%</span>；沪金2606最新价1053.18，涨幅 <span class="up-text">3.18%</span>。避险驱动下，贵金属仍是全天最清晰的强势主线。
+                </div>
+            </div>
+
+            <div class="focus-item">
+                <div class="focus-kicker">领跌板块</div>
+                <div class="focus-headline headline-down"><span class="down-text">航运、原油与化工集体重挫</span></div>
+                <div class="focus-content">
+                    欧线集运2606跌幅扩大至 <span class="down-text">12.88%</span>，原油2605下跌 <span class="down-text">12.75%</span>，燃油2605下挫 <span class="down-text">11.17%</span>。化工链中甲醇、乙二醇、PTA也都处在跌幅前列。
+                </div>
+            </div>
+
+            <div class="focus-item">
+                <div class="focus-kicker">情绪关键词</div>
+                <div class="focus-headline headline-down"><span class="down-text">避险、杀跌、放量、弱化工</span></div>
+                <div class="focus-content">
+                    沪银、沪金持续吸引资金，甲醇、PTA、PVC成交进一步放大；而能化和煤化工链条出现明显杀跌，市场风险偏好显著回落。
+                </div>
+            </div>
+        </div>
+
+        <div class="section-title">盘面雷达</div>
+        <div class="tab-bar">
+            <button class="tab-btn active" type="button" data-primary-tab="market">主力合约全景图</button>
+            <button class="tab-btn" type="button" data-primary-tab="move">涨跌幅榜</button>
+            <button class="tab-btn" type="button" data-primary-tab="volume">成交持仓榜</button>
+            <button class="tab-btn" type="button" data-primary-tab="position">增减仓榜</button>
+        </div>
+
+        <div class="tab-panel active" data-primary-panel="market">
+            <div class="sub-tab-bar">
+                <button class="sub-tab-btn active" type="button" data-market-tab="chemical">化工</button>
+                <button class="sub-tab-btn" type="button" data-market-tab="black">黑色金属</button>
+                <button class="sub-tab-btn" type="button" data-market-tab="energy">能源</button>
+                <button class="sub-tab-btn" type="button" data-market-tab="agri">农副产品</button>
+                <button class="sub-tab-btn" type="button" data-market-tab="oils">油脂油料</button>
+                <button class="sub-tab-btn" type="button" data-market-tab="softs">软商品</button>
+                <button class="sub-tab-btn" type="button" data-market-tab="shipping">航运</button>
+                <button class="sub-tab-btn" type="button" data-market-tab="light">轻化工</button>
+                <button class="sub-tab-btn" type="button" data-market-tab="coal">煤炭</button>
+                <button class="sub-tab-btn" type="button" data-market-tab="precious">贵金属</button>
+                <button class="sub-tab-btn" type="button" data-market-tab="nonferrous">有色金属</button>
+            </div>
+
+            <div class="market-table-wrap tab-panel active" data-market-panel="chemical">
+                <div class="category-row">■ 化工<span class="category-note">板块大面积转弱，甲醇、乙二醇、PTA与纯苯跌幅居前。</span></div>
+                <div class="grid-data">
+                <div class="data-cell"><div class="c-name">甲醇</div><div class="c-price">3014</div><div class="c-pct down-text">▼ 8.05%</div><div class="c-tag tag-down">放量</div></div>
+                <div class="data-cell"><div class="c-name">乙二醇</div><div class="c-price">4863</div><div class="c-pct down-text">▼ 8.88%</div><div class="c-tag tag-down">增仓</div></div>
+                <div class="data-cell"><div class="c-name">橡胶</div><div class="c-price">16415</div><div class="c-pct down-text">▼ 0.15%</div><div class="c-tag">抗跌</div></div>
+                <div class="data-cell"><div class="c-name">20号胶</div><div class="c-price">13665</div><div class="c-pct down-text">▼ 0.62%</div></div>
+                <div class="data-cell"><div class="c-name">丁二烯胶</div><div class="c-price">16785</div><div class="c-pct down-text">▼ 4.33%</div></div>
+                <div class="data-cell"><div class="c-name">PTA</div><div class="c-price">6366</div><div class="c-pct down-text">▼ 5.69%</div><div class="c-tag tag-down">高成交</div></div>
+                <div class="data-cell"><div class="c-name">PVC</div><div class="c-price">5256</div><div class="c-pct down-text">▼ 3.26%</div></div>
+                <div class="data-cell"><div class="c-name">聚丙烯</div><div class="c-price">8764</div><div class="c-pct down-text">▼ 4.57%</div></div>
+                <div class="data-cell"><div class="c-name">塑料</div><div class="c-price">8380</div><div class="c-pct down-text">▼ 3.60%</div></div>
+                <div class="data-cell"><div class="c-name">苯乙烯</div><div class="c-price">9856</div><div class="c-pct down-text">▼ 7.38%</div></div>
+                <div class="data-cell"><div class="c-name">对二甲苯</div><div class="c-price">9190</div><div class="c-pct down-text">▼ 6.09%</div></div>
+                <div class="data-cell"><div class="c-name">纯苯</div><div class="c-price">8190</div><div class="c-pct down-text">▼ 8.09%</div></div>
+                <div class="data-cell"><div class="c-name">丙烯</div><div class="c-price">8528</div><div class="c-pct down-text">▼ 4.07%</div></div>
+            </div>
+            </div>
+
+            <div class="market-table-wrap tab-panel" data-market-panel="black">
+                <div class="category-row">■ 黑色金属<span class="category-note">板块整体偏弱，仅铁矿石微幅飘红，卷螺与双硅承压。</span></div>
+                <div class="grid-data">
+                <div class="data-cell"><div class="c-name">铁矿石</div><div class="c-price">812</div><div class="c-pct up-text">▲ 0.12%</div><div class="c-tag tag-up">偏强</div></div>
+                <div class="data-cell"><div class="c-name">热卷</div><div class="c-price">3287</div><div class="c-pct down-text">▼ 0.42%</div><div class="c-tag tag-down">减仓</div></div>
+                <div class="data-cell"><div class="c-name">硅铁</div><div class="c-price">5822</div><div class="c-pct down-text">▼ 2.22%</div><div class="c-tag tag-down">偏弱</div></div>
+                <div class="data-cell"><div class="c-name">螺纹钢</div><div class="c-price">3120</div><div class="c-pct down-text">▼ 0.32%</div></div>
+                <div class="data-cell"><div class="c-name">不锈钢</div><div class="c-price">14180</div><div class="c-pct down-text">▼ 0.32%</div></div>
+                <div class="data-cell"><div class="c-name">锰硅</div><div class="c-price">6380</div><div class="c-pct down-text">▼ 2.06%</div></div>
+            </div>
+            </div>
+
+            <div class="market-table-wrap tab-panel" data-market-panel="energy">
+                <div class="category-row">■ 能源<span class="category-note">系统性杀跌最明显，原油与燃油大跌，LPG也转弱。</span></div>
+                <div class="grid-data">
+                <div class="data-cell"><div class="c-name">原油</div><div class="c-price">653.8</div><div class="c-pct down-text">▼ 12.75%</div><div class="c-tag tag-down">领跌</div></div>
+                <div class="data-cell"><div class="c-name">燃油</div><div class="c-price">4001</div><div class="c-pct down-text">▼ 11.17%</div><div class="c-tag tag-down">共振走弱</div></div>
+                <div class="data-cell"><div class="c-name">LPG</div><div class="c-price">6050</div><div class="c-pct down-text">▼ 5.41%</div><div class="c-tag tag-down">转弱</div></div>
+                <div class="data-cell"><div class="c-name">低硫燃油</div><div class="c-price">4716</div><div class="c-pct down-text">▼ 8.36%</div></div>
+                <div class="data-cell"><div class="c-name">沥青</div><div class="c-price">4284</div><div class="c-pct down-text">▼ 5.56%</div></div>
+            </div>
+            </div>
+
+            <div class="market-table-wrap tab-panel" data-market-panel="agri">
+                <div class="category-row">■ 农副产品<span class="category-note">板块整体偏弱，苹果相对抗跌偏强，生猪回落更明显。</span></div>
+                <div class="grid-data">
+                <div class="data-cell"><div class="c-name">苹果</div><div class="c-price">9860</div><div class="c-pct up-text">▲ 0.95%</div><div class="c-tag tag-up">领涨</div></div>
+                <div class="data-cell"><div class="c-name">玉米</div><div class="c-price">2350</div><div class="c-pct up-text">▲ 0.04%</div><div class="c-tag">高持仓</div></div>
+                <div class="data-cell"><div class="c-name">生猪</div><div class="c-price">9610</div><div class="c-pct down-text">▼ 2.88%</div><div class="c-tag tag-down">偏弱</div></div>
+                <div class="data-cell"><div class="c-name">淀粉</div><div class="c-price">2741</div><div class="c-pct">0.00%</div></div>
+                <div class="data-cell"><div class="c-name">鸡蛋</div><div class="c-price">3415</div><div class="c-pct down-text">▼ 0.81%</div></div>
+                <div class="data-cell"><div class="c-name">红枣</div><div class="c-price">8635</div><div class="c-pct down-text">▼ 0.75%</div></div>
+                <div class="data-cell"><div class="c-name">花生</div><div class="c-price">8012</div><div class="c-pct down-text">▼ 1.04%</div></div>
+            </div>
+            </div>
+
+            <div class="market-table-wrap tab-panel" data-market-panel="oils">
+                <div class="category-row">■ 油脂油料<span class="category-note">板块全面回落，粕类与油脂同步承压，豆粕减仓最明显。</span></div>
+                <div class="grid-data">
+                <div class="data-cell"><div class="c-name">豆油</div><div class="c-price">8624</div><div class="c-pct down-text">▼ 0.92%</div><div class="c-tag tag-down">减仓</div></div>
+                <div class="data-cell"><div class="c-name">棕榈油</div><div class="c-price">9780</div><div class="c-pct down-text">▼ 1.59%</div><div class="c-tag tag-down">偏弱</div></div>
+                <div class="data-cell"><div class="c-name">豆粕</div><div class="c-price">2875</div><div class="c-pct down-text">▼ 1.51%</div><div class="c-tag tag-down">高持仓</div></div>
+                <div class="data-cell"><div class="c-name">豆一</div><div class="c-price">4614</div><div class="c-pct up-text">▲ 0.04%</div></div>
+                <div class="data-cell"><div class="c-name">豆二</div><div class="c-price">3670</div><div class="c-pct down-text">▼ 1.58%</div></div>
+                <div class="data-cell"><div class="c-name">菜油</div><div class="c-price">9720</div><div class="c-pct down-text">▼ 1.74%</div></div>
+                <div class="data-cell"><div class="c-name">菜粕</div><div class="c-price">2265</div><div class="c-pct down-text">▼ 1.69%</div></div>
+            </div>
+            </div>
+
+            <div class="market-table-wrap tab-panel" data-market-panel="softs">
+                <div class="category-row">■ 软商品<span class="category-note">整体偏弱，棉花与白糖走低，棉纱仅小幅收红。</span></div>
+                <div class="grid-data">
+                <div class="data-cell"><div class="c-name">棉花</div><div class="c-price">15245</div><div class="c-pct down-text">▼ 0.55%</div><div class="c-tag tag-down">偏弱</div></div>
+                <div class="data-cell"><div class="c-name">棉纱</div><div class="c-price">21565</div><div class="c-pct up-text">▲ 0.07%</div><div class="c-tag">抗跌</div></div>
+                <div class="data-cell"><div class="c-name">白糖</div><div class="c-price">5356</div><div class="c-pct down-text">▼ 1.02%</div><div class="c-tag tag-down">偏弱</div></div>
+            </div>
+            </div>
+
+            <div class="market-table-wrap tab-panel" data-market-panel="shipping">
+                <div class="category-row">■ 航运<span class="category-note">单一核心品种主导，仍是全市场最剧烈的弱势方向。</span></div>
+                <div class="grid-data">
+                <div class="data-cell"><div class="c-name">欧线集运</div><div class="c-price">2112.5</div><div class="c-pct down-text">▼ 12.88%</div><div class="c-tag tag-down">领跌</div></div>
+                <div class="data-cell"><div class="c-name">波动标签</div><div class="c-price">高波动</div><div class="c-pct">风险较高</div></div>
+                <div class="data-cell"><div class="c-name">情绪描述</div><div class="c-price">偏空</div><div class="c-pct">单品主导</div></div>
+            </div>
+            </div>
+
+            <div class="market-table-wrap tab-panel" data-market-panel="light">
+                <div class="category-row">■ 轻化工<span class="category-note">轻工建材整体走弱，短纤、瓶片与烧碱跌幅更大。</span></div>
+                <div class="grid-data">
+                <div class="data-cell"><div class="c-name">烧碱</div><div class="c-price">2250</div><div class="c-pct down-text">▼ 4.13%</div><div class="c-tag tag-down">领跌</div></div>
+                <div class="data-cell"><div class="c-name">纯碱</div><div class="c-price">1167</div><div class="c-pct down-text">▼ 1.85%</div><div class="c-tag tag-down">偏弱</div></div>
+                <div class="data-cell"><div class="c-name">玻璃</div><div class="c-price">999</div><div class="c-pct down-text">▼ 2.54%</div><div class="c-tag">高持仓</div></div>
+                <div class="data-cell"><div class="c-name">瓶片</div><div class="c-price">7846</div><div class="c-pct down-text">▼ 5.17%</div></div>
+                <div class="data-cell"><div class="c-name">短纤</div><div class="c-price">7894</div><div class="c-pct down-text">▼ 5.07%</div></div>
+                <div class="data-cell"><div class="c-name">纸浆</div><div class="c-price">5072</div><div class="c-pct down-text">▼ 1.48%</div></div>
+                <div class="data-cell"><div class="c-name">胶版纸</div><div class="c-price">4056</div><div class="c-pct down-text">▼ 1.22%</div></div>
+            </div>
+            </div>
+
+            <div class="market-table-wrap tab-panel" data-market-panel="coal">
+                <div class="category-row">■ 煤炭<span class="category-note">双焦继续下探，焦煤跌幅显著高于焦炭。</span></div>
+                <div class="grid-data">
+                <div class="data-cell"><div class="c-name">焦煤</div><div class="c-price">1114.5</div><div class="c-pct down-text">▼ 5.19%</div><div class="c-tag tag-down">领跌</div></div>
+                <div class="data-cell"><div class="c-name">焦炭</div><div class="c-price">1675.0</div><div class="c-pct down-text">▼ 2.62%</div><div class="c-tag tag-down">偏弱</div></div>
+                <div class="data-cell"><div class="c-name">动力煤</div><div class="c-price">-</div><div class="c-pct down-text">--</div><div class="c-tag">无报价</div></div>
+            </div>
+            </div>
+
+            <div class="market-table-wrap tab-panel" data-market-panel="precious">
+                <div class="category-row">■ 贵金属<span class="category-note">避险驱动最强，沪银继续领涨，沪金与钯同步走高。</span></div>
+                <div class="grid-data">
+                <div class="data-cell"><div class="c-name">沪银</div><div class="c-price">18918</div><div class="c-pct up-text">▲ 4.98%</div><div class="c-tag tag-up">领涨</div></div>
+                <div class="data-cell"><div class="c-name">沪金</div><div class="c-price">1053.18</div><div class="c-pct up-text">▲ 3.18%</div><div class="c-tag tag-up">高成交</div></div>
+                <div class="data-cell"><div class="c-name">钯</div><div class="c-price">375.5</div><div class="c-pct up-text">▲ 3.69%</div><div class="c-tag tag-up">跟涨</div></div>
+                <div class="data-cell"><div class="c-name">铂</div><div class="c-price">509.25</div><div class="c-pct up-text">▲ 2.27%</div></div>
+            </div>
+            </div>
+
+            <div class="market-table-wrap tab-panel" data-market-panel="nonferrous">
+                <div class="category-row">■ 有色金属<span class="category-note">内部分化加大，铜锡偏强，氧化铝与锂系继续承压。</span></div>
+                <div class="grid-data" style="border-bottom: none;">
+                <div class="data-cell"><div class="c-name">沪锡</div><div class="c-price">375210</div><div class="c-pct up-text">▲ 1.61%</div><div class="c-tag tag-up">领涨</div></div>
+                <div class="data-cell"><div class="c-name">沪铜</div><div class="c-price">97030</div><div class="c-pct up-text">▲ 1.54%</div><div class="c-tag tag-up">偏强</div></div>
+                <div class="data-cell"><div class="c-name">碳酸锂</div><div class="c-price">158620</div><div class="c-pct down-text">▼ 2.62%</div><div class="c-tag tag-down">领跌</div></div>
+                <div class="data-cell"><div class="c-name">沪铝</div><div class="c-price">24660</div><div class="c-pct down-text">▼ 0.42%</div></div>
+                <div class="data-cell"><div class="c-name">沪锌</div><div class="c-price">23550</div><div class="c-pct down-text">▼ 0.06%</div></div>
+                <div class="data-cell"><div class="c-name">沪铅</div><div class="c-price">16655</div><div class="c-pct up-text">▲ 0.94%</div></div>
+                <div class="data-cell"><div class="c-name">沪镍</div><div class="c-price">134540</div><div class="c-pct down-text">▼ 0.80%</div></div>
+                <div class="data-cell"><div class="c-name">国际铜</div><div class="c-price">86020</div><div class="c-pct up-text">▲ 1.68%</div></div>
+                <div class="data-cell"><div class="c-name">氧化铝</div><div class="c-price">2758</div><div class="c-pct down-text">▼ 4.04%</div></div>
+                <div class="data-cell"><div class="c-name">铸造铝</div><div class="c-price">23515</div><div class="c-pct down-text">▼ 0.17%</div></div>
+                <div class="data-cell"><div class="c-name">工业硅</div><div class="c-price">8325</div><div class="c-pct down-text">▼ 0.77%</div></div>
+            </div>
+            </div>
+        </div>
+
+        <div class="tab-panel" data-primary-panel="move">
+        <table class="report-table">
+            <thead>
+                <tr>
+                    <th>排名</th>
+                    <th>涨幅前10</th>
+                    <th>变化值</th>
+                    <th>跌幅前10</th>
+                    <th>变化值</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="rank-col">1</td>
+                    <td class="val-col">沪银2606</td>
+                    <td class="val-col up-text">+4.98% / +897</td>
+                    <td class="val-col">欧线集运2606</td>
+                    <td class="val-col down-text">-12.88% / -312.2</td>
+                </tr>
+                <tr>
+                    <td class="rank-col">2</td>
+                    <td class="val-col">沪金2606</td>
+                    <td class="val-col up-text">+3.18% / +32.5</td>
+                    <td class="val-col">原油2605</td>
+                    <td class="val-col down-text">-12.75% / -95.5</td>
+                </tr>
+                <tr>
+                    <td class="rank-col">3</td>
+                    <td class="val-col">钯2606</td>
+                    <td class="val-col up-text">+3.69% / +13.35</td>
+                    <td class="val-col">燃油2605</td>
+                    <td class="val-col down-text">-11.17% / -503</td>
+                </tr>
+                <tr>
+                    <td class="rank-col">4</td>
+                    <td class="val-col">铂2606</td>
+                    <td class="val-col up-text">+2.27% / +11.3</td>
+                    <td class="val-col">乙二醇2605</td>
+                    <td class="val-col down-text">-8.88% / -474</td>
+                </tr>
+                <tr>
+                    <td class="rank-col">5</td>
+                    <td class="val-col">国际铜2605</td>
+                    <td class="val-col up-text">+1.68% / +1420</td>
+                    <td class="val-col">低硫燃油2605</td>
+                    <td class="val-col down-text">-8.36% / -430</td>
+                </tr>
+                <tr>
+                    <td class="rank-col">6</td>
+                    <td class="val-col">沪锡2605</td>
+                    <td class="val-col up-text">+1.61% / +5940</td>
+                    <td class="val-col">纯苯2605</td>
+                    <td class="val-col down-text">-8.09% / -721</td>
+                </tr>
+                <tr>
+                    <td class="rank-col">7</td>
+                    <td class="val-col">沪深2606</td>
+                    <td class="val-col up-text">+1.58% / +69</td>
+                    <td class="val-col">甲醇605</td>
+                    <td class="val-col down-text">-8.05% / -264</td>
+                </tr>
+                <tr>
+                    <td class="rank-col">8</td>
+                    <td class="val-col">沪铜2605</td>
+                    <td class="val-col up-text">+1.54% / +1470</td>
+                    <td class="val-col">苯乙烯2605</td>
+                    <td class="val-col down-text">-7.38% / -785</td>
+                </tr>
+                <tr>
+                    <td class="rank-col">9</td>
+                    <td class="val-col">苹果605</td>
+                    <td class="val-col up-text">+0.95% / +93</td>
+                    <td class="val-col">对二甲苯605</td>
+                    <td class="val-col down-text">-6.09% / -596</td>
+                </tr>
+                <tr>
+                    <td class="rank-col">10</td>
+                    <td class="val-col">沪铅2605</td>
+                    <td class="val-col up-text">+0.94% / +155</td>
+                    <td class="val-col">PTA605</td>
+                    <td class="val-col down-text">-5.69% / -384</td>
+                </tr>
+            </tbody>
+        </table>
+        </div>
+
+        <div class="tab-panel" data-primary-panel="volume">
+        <table class="report-table">
+            <thead>
+                <tr>
+                    <th>排名</th>
+                    <th>成交量前10</th>
+                    <th>成交量</th>
+                    <th>持仓量前10</th>
+                    <th>持仓量</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="rank-col">1</td>
+                    <td class="val-col">甲醇605</td>
+                    <td class="val-col">244.88万手</td>
+                    <td class="val-col">豆粕2605</td>
+                    <td class="val-col">129.65万手</td>
+                </tr>
+                <tr>
+                    <td class="rank-col">2</td>
+                    <td class="val-col">PTA605</td>
+                    <td class="val-col">165.22万手</td>
+                    <td class="val-col">玻璃605</td>
+                    <td class="val-col">106.72万手</td>
+                </tr>
+                <tr>
+                    <td class="rank-col">3</td>
+                    <td class="val-col">PVC2605</td>
+                    <td class="val-col">160.67万手</td>
+                    <td class="val-col">玉米2605</td>
+                    <td class="val-col">100.34万手</td>
+                </tr>
+                <tr>
+                    <td class="rank-col">4</td>
+                    <td class="val-col">沥青2606</td>
+                    <td class="val-col">113.68万手</td>
+                    <td class="val-col">螺纹钢2605</td>
+                    <td class="val-col">87.02万手</td>
+                </tr>
+                <tr>
+                    <td class="rank-col">5</td>
+                    <td class="val-col">聚丙烯2605</td>
+                    <td class="val-col">104.90万手</td>
+                    <td class="val-col">PTA605</td>
+                    <td class="val-col">84.08万手</td>
+                </tr>
+                <tr>
+                    <td class="rank-col">6</td>
+                    <td class="val-col">乙二醇2605</td>
+                    <td class="val-col">100.66万手</td>
+                    <td class="val-col">纯碱605</td>
+                    <td class="val-col">78.71万手</td>
+                </tr>
+                <tr>
+                    <td class="rank-col">7</td>
+                    <td class="val-col">丁二烯胶2605</td>
+                    <td class="val-col">93.63万手</td>
+                    <td class="val-col">热卷2605</td>
+                    <td class="val-col">72.49万手</td>
+                </tr>
+                <tr>
+                    <td class="rank-col">8</td>
+                    <td class="val-col">沪银2606</td>
+                    <td class="val-col">92.82万手</td>
+                    <td class="val-col">PVC2605</td>
+                    <td class="val-col">67.72万手</td>
+                </tr>
+                <tr>
+                    <td class="rank-col">9</td>
+                    <td class="val-col">塑料2605</td>
+                    <td class="val-col">91.92万手</td>
+                    <td class="val-col">甲醇605</td>
+                    <td class="val-col">55.59万手</td>
+                </tr>
+                <tr>
+                    <td class="rank-col">10</td>
+                    <td class="val-col">豆粕2605</td>
+                    <td class="val-col">91.32万手</td>
+                    <td class="val-col">菜粕605</td>
+                    <td class="val-col">54.28万手</td>
+                </tr>
+            </tbody>
+        </table>
+        </div>
+
+        <div class="tab-panel" data-primary-panel="position">
+        <table class="report-table">
+            <thead>
+                <tr>
+                    <th>排名</th>
+                    <th>增仓前10</th>
+                    <th>增减值</th>
+                    <th>减仓前10</th>
+                    <th>增减值</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="rank-col">1</td>
+                    <td class="val-col">沪银2606</td>
+                    <td class="val-col up-text">+7810</td>
+                    <td class="val-col">豆粕2605</td>
+                    <td class="val-col down-text">-87723</td>
+                </tr>
+                <tr>
+                    <td class="rank-col">2</td>
+                    <td class="val-col">沪金2606</td>
+                    <td class="val-col up-text">+7168</td>
+                    <td class="val-col">热卷2605</td>
+                    <td class="val-col down-text">-48181</td>
+                </tr>
+                <tr>
+                    <td class="rank-col">3</td>
+                    <td class="val-col">短纤606</td>
+                    <td class="val-col up-text">+5748</td>
+                    <td class="val-col">PTA605</td>
+                    <td class="val-col down-text">-41687</td>
+                </tr>
+                <tr>
+                    <td class="rank-col">4</td>
+                    <td class="val-col">乙二醇2605</td>
+                    <td class="val-col up-text">+2651</td>
+                    <td class="val-col">豆油2605</td>
+                    <td class="val-col down-text">-41616</td>
+                </tr>
+                <tr>
+                    <td class="rank-col">5</td>
+                    <td class="val-col">原油2605</td>
+                    <td class="val-col up-text">+1475</td>
+                    <td class="val-col">PVC2605</td>
+                    <td class="val-col down-text">-40159</td>
+                </tr>
+                <tr>
+                    <td class="rank-col">6</td>
+                    <td class="val-col">胶版纸2606</td>
+                    <td class="val-col up-text">+1258</td>
+                    <td class="val-col">甲醇605</td>
+                    <td class="val-col down-text">-34558</td>
+                </tr>
+                <tr>
+                    <td class="rank-col">7</td>
+                    <td class="val-col">菜粕605</td>
+                    <td class="val-col up-text">+1035</td>
+                    <td class="val-col">聚丙烯2605</td>
+                    <td class="val-col down-text">-33887</td>
+                </tr>
+                <tr>
+                    <td class="rank-col">8</td>
+                    <td class="val-col">沪铅2605</td>
+                    <td class="val-col up-text">+1005</td>
+                    <td class="val-col">螺纹钢2605</td>
+                    <td class="val-col down-text">-30886</td>
+                </tr>
+                <tr>
+                    <td class="rank-col">9</td>
+                    <td class="val-col">烧碱605</td>
+                    <td class="val-col up-text">+878</td>
+                    <td class="val-col">棕榈油2605</td>
+                    <td class="val-col down-text">-27626</td>
+                </tr>
+                <tr>
+                    <td class="rank-col">10</td>
+                    <td class="val-col">对二甲苯605</td>
+                    <td class="val-col up-text">+598</td>
+                    <td class="val-col">白糖605</td>
+                    <td class="val-col down-text">-25932</td>
+                </tr>
+            </tbody>
+        </table>
+        </div>
+
+    </div>
+
+    <!-- 页脚与合规信息 -->
+    <footer>
+        <div class="disclaimer">
+            <strong>独家整理：</strong> 金十期货APP<br><br>
+            <strong>免责声明：</strong> 本图表数据及客观描述仅供专业投资者事实参考，不构成针对任何个人的具体投资建议或绝对行情预测。期市具有杠杆风险，投资者应独立决策并自行承担风险。不对因使用本数据产生的损失负责。
+        </div>
+    </footer>
+
+    <script>
+        const primaryButtons = document.querySelectorAll("[data-primary-tab]");
+        const primaryPanels = document.querySelectorAll("[data-primary-panel]");
+        const marketButtons = document.querySelectorAll("[data-market-tab]");
+        const marketPanels = document.querySelectorAll("[data-market-panel]");
+
+        primaryButtons.forEach((button) => {
+            button.addEventListener("click", () => {
+                const target = button.getAttribute("data-primary-tab");
+                primaryButtons.forEach((item) => item.classList.toggle("active", item === button));
+                primaryPanels.forEach((panel) => {
+                    panel.classList.toggle("active", panel.getAttribute("data-primary-panel") === target);
+                });
+            });
+        });
+
+        marketButtons.forEach((button) => {
+            button.addEventListener("click", () => {
+                const target = button.getAttribute("data-market-tab");
+                marketButtons.forEach((item) => item.classList.toggle("active", item === button));
+                marketPanels.forEach((panel) => {
+                    panel.classList.toggle("active", panel.getAttribute("data-market-panel") === target);
+                });
+            });
+        });
+
+        document.querySelectorAll(".market-table-wrap .data-cell").forEach((cell) => {
+            if (cell.querySelector(".c-pct.up-text")) {
+                cell.classList.add("cell-up");
+            } else if (cell.querySelector(".c-pct.down-text")) {
+                cell.classList.add("cell-down");
+            } else {
+                cell.classList.add("cell-flat");
+            }
+        });
+    </script>
+
+</body>
+</html>
